@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qiita Atlas</title>
+<meta name="description" content="7,236 human microbiome studies arranged by textual similarity, coloured by the MONDO disease hierarchy at any depth.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --sky:#070B14; --ground:#0B0F1A; --panel:rgba(12,17,29,.82); --panel-solid:#0E1422;
+  --ink:#E8ECF5; --ink-2:#A9B2C6; --ink-3:#6B7590; --line:rgba(168,184,222,.14); --line-2:rgba(168,184,222,.28);
+  --star:#F4F0E6; --focus:#F4F0E6;
+  --c1:#4C8FE0; --c2:#E08A1F; --c3:#6EE0B2; --c4:#E0405F; --c5:#F5E663; --c6:#E7A6FF; --c7:#C7F0FF; --other:#4A5470; --none:#2B3245;
+  --serif:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",Menlo,Consolas,monospace;
+  --radius:6px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--sky);color:var(--ink);font:14px/1.45 var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+#sky{position:fixed;inset:0;display:block;cursor:crosshair;touch-action:none}
+#sky.dragging{cursor:grabbing}
+#sky.pointing{cursor:pointer}
+
+/* ---- panel ---- */
+#panel{position:fixed;top:16px;left:16px;bottom:16px;width:328px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;
+  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden;z-index:2}
+#panel .scroll{overflow-y:auto;padding:22px 22px 18px;flex:1;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.eyebrow{font:500 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+h1{font:600 34px/1.05 var(--serif);letter-spacing:-.01em;margin:8px 0 6px;text-wrap:balance}
+h1 em{font-style:italic;font-weight:500;color:var(--ink-2)}
+.lede{color:var(--ink-2);margin:0 0 20px;font-size:13px;max-width:34ch}
+.foot .src{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em}
+.lede b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:12.5px}
+
+fieldset{border:0;margin:0 0 18px;padding:0;min-width:0}
+legend,.label{display:block;font:500 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px;padding:0}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg button{background:transparent;border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;text-align:left;color:var(--ink-2);cursor:pointer;line-height:1.2}
+.seg button small{display:block;font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:3px}
+.seg button:hover{border-color:var(--line-2);color:var(--ink)}
+.seg button[aria-pressed="true"]{border-color:var(--star);color:var(--ink);background:rgba(244,240,230,.06)}
+
+/* depth slider */
+#depthBox{border:1px solid var(--line);border-radius:var(--radius);padding:14px 14px 12px;margin-bottom:18px}
+#depthBox[hidden]{display:none}
+.depth-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.depth-head .label{margin:0}
+.depth-read{font-family:var(--mono);font-size:12px;color:var(--ink-2);text-align:right}
+.depth-read b{color:var(--ink);font-weight:500}
+input[type=range].depth{width:100%;margin:6px 0 4px;appearance:none;-webkit-appearance:none;background:transparent;height:24px}
+input[type=range].depth::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,var(--line-2),var(--star));border-radius:1px}
+input[type=range].depth::-moz-range-track{height:2px;background:linear-gradient(90deg,var(--line-2),var(--star));border-radius:1px}
+input[type=range].depth::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--star);border:3px solid var(--panel-solid);box-shadow:0 0 0 1px var(--star),0 0 14px rgba(244,240,230,.55);margin-top:-7px;cursor:ew-resize}
+input[type=range].depth::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--star);border:3px solid var(--panel-solid);box-shadow:0 0 0 1px var(--star),0 0 14px rgba(244,240,230,.55);cursor:ew-resize}
+.ticks{display:flex;justify-content:space-between;font:11px var(--sans);color:var(--ink-3);letter-spacing:.04em}
+.crumb{margin-top:10px;font:italic 500 15px/1.35 var(--serif);color:var(--ink-2);min-height:1.4em}
+.crumb span{color:var(--ink)}
+.crumb i{font-style:normal;color:var(--ink-3);padding:0 .35em}
+
+/* legend */
+#legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+#legend li{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 8px;border-radius:var(--radius);cursor:pointer;color:var(--ink-2);border:1px solid transparent}
+#legend li:hover{background:rgba(168,184,222,.07);color:var(--ink)}
+#legend li[aria-pressed="true"]{border-color:var(--line-2);color:var(--ink);background:rgba(168,184,222,.06)}
+#legend li.dim{color:var(--ink-3)}
+#legend .swatch{width:10px;height:10px;border-radius:50%;justify-self:center;box-shadow:0 0 8px currentColor}
+#legend .name{display:flex;align-items:center;gap:6px;min-width:0}
+#legend .name .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#legend .tag{flex:none;font:italic 500 11px/1 var(--serif);color:var(--ink-3);padding:0 2px}
+#legend .n{font-family:var(--mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+#legend li[aria-pressed="true"] .n,#legend li:hover .n{color:var(--ink-2)}
+
+/* search & years */
+.field{position:relative;margin-bottom:12px}
+.field input[type=search]{width:100%;background:rgba(7,11,20,.6);border:1px solid var(--line);border-radius:var(--radius);padding:9px 34px 9px 12px;color:var(--ink);outline-offset:0}
+.field input[type=search]::placeholder{color:var(--ink-3)}
+.field input[type=search]:focus{border-color:var(--line-2)}
+.field .hits{position:absolute;right:10px;top:50%;transform:translateY(-50%);font:12px var(--mono);color:var(--ink-3)}
+.years{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px}
+.dual{position:relative;height:24px}
+.dual input[type=range]{position:absolute;inset:0;width:100%;appearance:none;-webkit-appearance:none;background:transparent;pointer-events:none;margin:0;height:24px}
+.dual input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line-2)}
+.dual input[type=range]::-moz-range-track{height:2px;background:var(--line-2)}
+.dual input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;pointer-events:auto;width:12px;height:12px;border-radius:50%;background:var(--ink-2);border:2px solid var(--panel-solid);box-shadow:0 0 0 1px var(--ink-2);margin-top:-5px;cursor:ew-resize}
+.dual input[type=range]::-moz-range-thumb{pointer-events:auto;width:8px;height:8px;border-radius:50%;background:var(--ink-2);border:2px solid var(--panel-solid);box-shadow:0 0 0 1px var(--ink-2);cursor:ew-resize}
+.dual .fill{position:absolute;top:11px;height:2px;background:var(--star);pointer-events:none}
+.years .read{font:12px var(--mono);color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.check{display:flex;align-items:center;gap:10px;color:var(--ink-2);cursor:pointer;padding:4px 0;user-select:none}
+.check input{accent-color:var(--star);width:14px;height:14px;margin:0}
+
+.foot{border-top:1px solid var(--line);padding:10px 22px 12px;font-size:11px;color:var(--ink-3);line-height:1.45}
+@media (max-height:720px){.foot .hint{display:none}}
+.foot a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line-2)}
+.foot kbd{font:11px var(--mono);color:var(--ink-2);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+
+/* ---- overlays ---- */
+#stats{position:fixed;top:20px;right:20px;z-index:2;text-align:right;font:12px/1.5 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums;pointer-events:none}
+#stats b{color:var(--ink-2);font-weight:500}
+#zoom{position:fixed;right:20px;bottom:20px;z-index:2;display:flex;flex-direction:column;gap:6px}
+#zoom button{width:36px;height:36px;border-radius:var(--radius);border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--ink-2);cursor:pointer;font:18px/1 var(--mono)}
+#zoom button:hover{color:var(--ink);border-color:var(--line-2)}
+#zoom button.reset{font:11px var(--sans);letter-spacing:.06em}
+
+#tip{position:fixed;z-index:3;width:320px;max-width:calc(100vw - 32px);pointer-events:none;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--line);border-radius:8px;padding:14px 16px 12px;box-shadow:0 18px 50px rgba(0,0,0,.5);opacity:0;transform:translateY(4px);transition:opacity .12s ease,transform .12s ease}
+#tip.show{opacity:1;transform:none}
+#tip .t{font:600 16px/1.3 var(--serif);color:var(--ink);text-wrap:balance;margin-bottom:6px}
+#tip .m{color:var(--ink-2);font-size:12.5px}
+#tip .m b{color:var(--ink);font-weight:500}
+#tip .row{display:flex;gap:8px;align-items:baseline;margin-top:8px;font-size:12px;color:var(--ink-2)}
+#tip .dot{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor;position:relative;top:1px}
+#tip .path{font:italic 500 13.5px/1.35 var(--serif);color:var(--ink-2);margin-top:6px}
+#tip .path i{font-style:normal;color:var(--ink-3);padding:0 .3em}
+#tip .path span:last-child{color:var(--ink)}
+#tip .cta{margin-top:10px;font:11px var(--mono);color:var(--ink-3);letter-spacing:.04em}
+
+#toggle{display:none}
+
+@media (prefers-reduced-motion:reduce){#tip{transition:none}}
+@media (max-width:760px){
+  #panel{top:auto;left:0;right:0;bottom:0;width:100%;max-width:none;max-height:52vh;border-radius:14px 14px 0 0;border-bottom:0}
+  #panel .scroll{padding:16px 16px 12px}
+  h1{font-size:28px}
+  #stats{right:16px;top:16px}
+  #zoom{right:12px;bottom:calc(52vh + 12px)}
+  .seg{grid-template-columns:1fr 1fr}
+  #tip{left:16px!important;right:16px;top:auto!important;bottom:calc(52vh + 12px);width:auto}
+}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-label="Map of 7,236 microbiome papers; each star is one paper" role="img"></canvas>
+
+<aside id="panel">
+  <div class="scroll">
+    <div class="eyebrow">Qiita · Human microbiome literature</div>
+    <h1>Qiita <em>Atlas</em></h1>
+    <p class="lede"><b id="nAll">7,236</b> full-text manuscripts</p>
+
+    <fieldset>
+      <legend>Colour by</legend>
+      <div class="seg" id="modes" role="group">
+        <button type="button" data-mode="mondo" aria-pressed="true">Disease<small>MONDO hierarchy</small></button>
+        <button type="button" data-mode="site" aria-pressed="false">Body site<small>7 sites</small></button>
+        <button type="button" data-mode="group8" aria-pressed="false">Disease class<small>8 curated groups</small></button>
+        <button type="button" data-mode="cluster" aria-pressed="false">Topic cluster<small>58 clusters</small></button>
+      </div>
+    </fieldset>
+
+    <div id="depthBox">
+      <div class="depth-head"><span class="label">Hierarchy depth</span><span class="depth-read" id="depthRead"></span></div>
+      <input type="range" class="depth" id="depth" min="3" max="10" step="1" value="3" aria-label="MONDO hierarchy depth">
+      <div class="ticks"><span>organ systems</span><span>specific diseases</span></div>
+      <div class="crumb" id="crumb"></div>
+    </div>
+
+    <fieldset>
+      <legend id="legendTitle">Constellations</legend>
+      <ul id="legend"></ul>
+    </fieldset>
+
+    <fieldset>
+      <legend>Find</legend>
+      <div class="field"><input type="search" id="q" placeholder="Title or journal…" autocomplete="off" aria-label="Search titles and journals"><span class="hits" id="hits"></span></div>
+      <div class="years">
+        <div class="dual" id="dual">
+          <div class="fill" id="yearFill"></div>
+          <input type="range" id="y0" min="2010" max="2026" value="2010" step="1" aria-label="From year">
+          <input type="range" id="y1" min="2010" max="2026" value="2026" step="1" aria-label="To year">
+        </div>
+        <div class="read" id="yearRead">2010 – 2026</div>
+      </div>
+      <label class="check" style="margin-top:10px"><input type="checkbox" id="haze" checked> Show density haze</label>
+      <label class="check"><input type="checkbox" id="lines" checked> Draw constellation lines</label>
+      <label class="check"><input type="checkbox" id="labels" checked> Label constellations</label>
+      <label class="check" id="looseRow"><input type="checkbox" id="loose" checked> Include loosely placed papers</label>
+    </fieldset>
+  </div>
+  <div class="foot">
+    <span class="hint">Scroll · drag · click → PubMed · <kbd>0</kbd> fit<br></span>
+    <span class="src"><a href="https://mondo.monarchinitiative.org/" target="_blank" rel="noopener">MONDO</a> <span id="mondoV"></span> · <span id="nMapped"></span></span>
+  </div>
+</aside>
+
+<div id="stats"></div>
+<div id="zoom">
+  <button type="button" id="zin" aria-label="Zoom in">+</button>
+  <button type="button" id="zout" aria-label="Zoom out">−</button>
+  <button type="button" id="zreset" class="reset" aria-label="Reset view">FIT</button>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+(async()=>{
+  try{
+    const r = await fetch('data.json');
+    if(!r.ok) throw new Error('data '+r.status);
+    window.__ATLAS_DATA = await r.json();
+    const s = document.createElement('script'); s.src='app.js'; document.body.appendChild(s);
+  }catch(e){
+    document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;inset:0;display:grid;place-items:center;color:#A9B2C6;font:14px system-ui;background:#070B14">Could not load atlas data — please refresh.</div>');
+  }
+})();
+</script></body>
+</html>
