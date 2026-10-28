@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qiita Atlas — 3D</title>
+<meta name="description" content="7,236 human microbiome studies as a 3D constellation, colored by MONDO disease hierarchy, body site, disease class, or topic cluster.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --sky:#070B14; --panel:rgba(12,17,29,.82); --panel-solid:#0E1422;
+  --ink:#E8ECF5; --ink-2:#A9B2C6; --ink-3:#6B7590; --line:rgba(168,184,222,.14); --line-2:rgba(168,184,222,.28);
+  --star:#F4F0E6;
+  --c1:#4C8FE0; --c2:#E08A1F; --c3:#6EE0B2; --c4:#E0405F; --c5:#F5E663; --c6:#E7A6FF; --c7:#C7F0FF; --other:#4A5470; --none:#2B3245;
+  --serif:"Cormorant Garamond",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",Menlo,Consolas,monospace;
+  --radius:6px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--sky);color:var(--ink);font:14px/1.45 var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--star);outline-offset:2px}
+
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
+#gl{display:block;cursor:grab;touch-action:none;background:var(--sky)}
+#gl.dragging{cursor:grabbing}
+#gl.pointing{cursor:pointer}
+
+#panel{position:fixed;top:16px;left:16px;bottom:16px;width:312px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;
+  background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45);overflow:hidden;z-index:2}
+#panel .scroll{overflow-y:auto;padding:20px 20px 16px;flex:1;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+.eyebrow{font:500 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+h1{font:600 30px/1.05 var(--serif);letter-spacing:-.01em;margin:8px 0 6px}
+h1 em{font-style:italic;font-weight:500;color:var(--ink-2)}
+.lede{color:var(--ink-2);margin:0 0 18px;font-size:12.5px}
+.lede b{color:var(--ink);font-weight:500;font-family:var(--mono);font-size:12px}
+fieldset{border:0;margin:0 0 16px;padding:0;min-width:0}
+legend,.label{display:block;font:500 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin-bottom:9px;padding:0}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg button{background:transparent;border:1px solid var(--line);border-radius:var(--radius);padding:7px 9px;text-align:left;color:var(--ink-2);cursor:pointer;line-height:1.2}
+.seg button small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-top:2px}
+.seg button:hover{border-color:var(--line-2);color:var(--ink)}
+.seg button[aria-pressed="true"]{border-color:var(--star);color:var(--ink);background:rgba(244,240,230,.06)}
+#depthBox{border:1px solid var(--line);border-radius:var(--radius);padding:12px 12px 10px;margin-bottom:16px}
+#depthBox[hidden]{display:none}
+.depth-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+.depth-head .label{margin:0}
+.depth-read{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.depth-read b{color:var(--ink);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--star)}
+.ticks{display:flex;justify-content:space-between;font:10.5px var(--sans);color:var(--ink-3)}
+#legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+#legend li{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:10px;align-items:center;padding:5px 8px;border-radius:var(--radius);cursor:pointer;color:var(--ink-2);border:1px solid transparent}
+#legend li:hover{background:rgba(168,184,222,.07);color:var(--ink)}
+#legend li[aria-pressed="true"]{border-color:var(--line-2);color:var(--ink);background:rgba(168,184,222,.06)}
+#legend li.dim{color:var(--ink-3)}
+#legend .swatch{width:10px;height:10px;border-radius:50%;justify-self:center;box-shadow:0 0 8px currentColor}
+#legend .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#legend .n{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.field{position:relative;margin-bottom:10px}
+.field input[type=search]{width:100%;background:rgba(7,11,20,.6);border:1px solid var(--line);border-radius:var(--radius);padding:8px 34px 8px 11px;color:var(--ink)}
+.field input[type=search]::placeholder{color:var(--ink-3)}
+.field .hits{position:absolute;right:10px;top:50%;transform:translateY(-50%);font:12px var(--mono);color:var(--ink-3)}
+.years{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;margin-bottom:6px}
+.dual{position:relative;height:24px}
+.dual input[type=range]{position:absolute;inset:0;width:100%;appearance:none;-webkit-appearance:none;background:transparent;pointer-events:none;margin:0;height:24px}
+.dual input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line-2)}
+.dual input[type=range]::-moz-range-track{height:2px;background:var(--line-2)}
+.dual input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;pointer-events:auto;width:12px;height:12px;border-radius:50%;background:var(--ink-2);border:2px solid var(--panel-solid);box-shadow:0 0 0 1px var(--ink-2);margin-top:-5px;cursor:ew-resize}
+.dual input[type=range]::-moz-range-thumb{pointer-events:auto;width:8px;height:8px;border-radius:50%;background:var(--ink-2);border:2px solid var(--panel-solid);box-shadow:0 0 0 1px var(--ink-2);cursor:ew-resize}
+.dual .fill{position:absolute;top:11px;height:2px;background:var(--star);pointer-events:none}
+.years .read{font:12px var(--mono);color:var(--ink-2);white-space:nowrap}
+.check{display:flex;align-items:center;gap:9px;color:var(--ink-2);cursor:pointer;padding:3px 0;user-select:none}
+.check input{accent-color:var(--star);width:14px;height:14px;margin:0}
+.btnrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn{background:transparent;border:1px solid var(--line-2);border-radius:var(--radius);padding:8px 12px;color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--star)}
+.btn.primary{background:rgba(244,240,230,.08);border-color:var(--star)}
+select{background:rgba(7,11,20,.6);border:1px solid var(--line);border-radius:var(--radius);padding:7px 8px;color:var(--ink-2)}
+.foot{border-top:1px solid var(--line);padding:9px 20px 11px;font-size:11px;color:var(--ink-3);line-height:1.5}
+.foot a{color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line-2)}
+.foot kbd{font:11px var(--mono);color:var(--ink-2);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+
+#stats{position:fixed;top:20px;right:20px;z-index:2;text-align:right;font:12px/1.5 var(--mono);color:var(--ink-3);font-variant-numeric:tabular-nums;pointer-events:none}
+#stats b{color:var(--ink-2);font-weight:500}
+#zoom{position:fixed;right:20px;bottom:20px;z-index:2;display:flex;flex-direction:column;gap:6px}
+#zoom button{width:36px;height:36px;border-radius:var(--radius);border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(10px);color:var(--ink-2);cursor:pointer;font:17px/1 var(--mono)}
+#zoom button:hover{color:var(--ink);border-color:var(--line-2)}
+#zoom button.reset{font:10.5px var(--sans);letter-spacing:.06em}
+
+#tip{position:fixed;z-index:3;width:320px;max-width:calc(100vw - 32px);pointer-events:none;background:var(--panel);backdrop-filter:blur(14px);
+  border:1px solid var(--line);border-radius:8px;padding:13px 15px 11px;box-shadow:0 18px 50px rgba(0,0,0,.5);opacity:0;transform:translateY(4px);transition:opacity .12s,transform .12s}
+#tip.show{opacity:1;transform:none}
+#tip .t{font:600 15.5px/1.3 var(--serif);color:var(--ink);margin-bottom:5px}
+#tip .m{color:var(--ink-2);font-size:12px}
+#tip .m b{color:var(--ink);font-weight:500}
+#tip .path{font:italic 500 13px/1.35 var(--serif);color:var(--ink-2);margin-top:5px}
+#tip .path i{font-style:normal;color:var(--ink-3);padding:0 .3em}
+#tip .path span:last-child{color:var(--ink)}
+#tip .cta{margin-top:8px;font:10.5px var(--mono);color:var(--ink-3);letter-spacing:.04em}
+
+#loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--sky);z-index:5;font:italic 500 19px var(--serif);color:var(--ink-2);transition:opacity .6s}
+#loading.off{opacity:0;pointer-events:none}
+#skip{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:5;display:none}
+#skip.show{display:block}
+body.touring #panel, body.touring #zoom, body.touring #stats{opacity:0;pointer-events:none;transition:opacity .5s}
+#recdot{position:fixed;left:20px;top:20px;z-index:5;display:none;align-items:center;gap:8px;font:12px var(--mono);color:#E0405F}
+#recdot.show{display:flex}
+#recdot i{width:10px;height:10px;border-radius:50%;background:#E0405F;animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.25}}
+
+@media (prefers-reduced-motion:reduce){#tip,#fade,#cap,#bigtitle{transition:none}}
+@media (max-width:760px){
+  #panel{top:auto;left:0;right:0;bottom:0;width:100%;max-width:none;max-height:50vh;border-radius:14px 14px 0 0;border-bottom:0}
+  #panel .scroll{padding:14px 16px 10px}
+  h1{font-size:26px}
+  #zoom{right:12px;bottom:calc(50vh + 12px)}
+  #tip{left:16px!important;right:16px;top:auto!important;bottom:calc(50vh + 12px);width:auto}
+}
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="stage"><canvas id="gl" aria-label="3D map of 7,236 microbiome papers; each star is one paper" role="img"></canvas></div>
+
+<aside id="panel">
+  <div class="scroll">
+    <div class="eyebrow">Qiita · Human microbiome literature</div>
+    <h1>Qiita <em>Atlas</em> · 3D</h1>
+    <p class="lede"><b id="nAll">7,236</b> full-text manuscripts</p>
+
+    <fieldset>
+      <legend>Colour by</legend>
+      <div class="seg" id="modes" role="group">
+        <button type="button" data-mode="mondo" aria-pressed="true">Disease<small>MONDO hierarchy</small></button>
+        <button type="button" data-mode="site" aria-pressed="false">Body site<small>7 sites</small></button>
+        <button type="button" data-mode="group8" aria-pressed="false">Disease class<small>8 curated groups</small></button>
+        <button type="button" data-mode="cluster" aria-pressed="false">Topic cluster<small>58 clusters</small></button>
+      </div>
+    </fieldset>
+
+    <div id="depthBox">
+      <div class="depth-head"><span class="label">Hierarchy depth</span><span class="depth-read" id="depthRead"></span></div>
+      <input type="range" id="depth" min="3" max="10" step="1" value="3" aria-label="MONDO hierarchy depth">
+      <div class="ticks"><span>organ systems</span><span>specific diseases</span></div>
+    </div>
+
+    <fieldset>
+      <legend id="legendTitle">Constellations</legend>
+      <ul id="legend"></ul>
+    </fieldset>
+
+    <fieldset>
+      <legend>Find</legend>
+      <div class="field"><input type="search" id="q" placeholder="Title or journal…" autocomplete="off" aria-label="Search titles and journals"><span class="hits" id="hits"></span></div>
+      <div class="years">
+        <div class="dual">
+          <div class="fill" id="yearFill"></div>
+          <input type="range" id="y0" min="2010" max="2026" value="2010" step="1" aria-label="From year">
+          <input type="range" id="y1" min="2010" max="2026" value="2026" step="1" aria-label="To year">
+        </div>
+        <div class="read" id="yearRead">2010 – 2026</div>
+      </div>
+      <label class="check"><input type="checkbox" id="strict"> Strict labels only</label>
+      <label class="check"><input type="checkbox" id="labels" checked> Label constellations</label>
+      <label class="check"><input type="checkbox" id="spin" checked> Auto-rotate when idle</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Tour</legend>
+      <div class="btnrow">
+        <button type="button" class="btn primary" id="play">▶ Play tour</button>
+        <button type="button" class="btn" id="rec">● Record</button>
+        <select id="aspect" aria-label="Recording aspect"><option value="16:9">16:9</option><option value="9:16">9:16</option></select>
+      </div>
+    </fieldset>
+  </div>
+  <div class="foot">
+    Drag to orbit · scroll to zoom · right-drag / two fingers to pan · click → PubMed · <kbd>0</kbd> fit<br>
+    <a href="../">2D atlas</a> · depth here is illustrative: z is seeded jitter, the 2D layout is the real map
+  </div>
+</aside>
+
+<div id="stats"></div>
+<div id="zoom">
+  <button type="button" id="zin" aria-label="Zoom in">+</button>
+  <button type="button" id="zout" aria-label="Zoom out">−</button>
+  <button type="button" id="zreset" class="reset" aria-label="Reset view">FIT</button>
+</div>
+<div id="tip" role="tooltip"></div>
+<div id="loading">Charting 7,236 stars…</div>
+<button type="button" class="btn" id="skip">Skip tour (Esc)</button>
+<div id="recdot"><i></i>REC</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+const $ = id => document.getElementById(id);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const css = getComputedStyle(document.documentElement);
+const HUES = ['--c1','--c2','--c3','--c4','--c5','--c6','--c7'].map(v=>css.getPropertyValue(v).trim());
+const OTHER = css.getPropertyValue('--other').trim(), NONE = css.getPropertyValue('--none').trim();
+const SKY = css.getPropertyValue('--sky').trim();
+
+let DATA;
+try {
+  const r = await fetch('../data.json');
+  if (!r.ok) throw new Error('data '+r.status);
+  DATA = await r.json();
+} catch(e) {
+  $('loading').textContent = 'Could not load atlas data — please refresh.';
+  throw e;
+}
+
+const P = DATA.papers, N = P.length;
+const F = {x:0,y:1,title:2,journal:3,year:4,site:5,cluster:6,pmid:7,g8:8,mondo:9,extra:10,tier:11};
+const lineage = DATA.mondoLineage, nodes = DATA.mondoNodes;
+$('nAll').textContent = N.toLocaleString();
+
+// ---------- geometry: x,y from the 2D layout; z is SEEDED JITTER (synthetic depth, not data) ----------
+let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
+for (const p of P){ const x=p[F.x],y=p[F.y]; if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+const spanX=maxX-minX, spanY=maxY-minY, span=Math.max(spanX,spanY);
+const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+const zAmp = 0.075*spanX; // shallow slab: ±7.5% of the x-range
+function zOf(pmid){ let h=(pmid^0x9E3779B9)>>>0; h=Math.imul(h,2654435761)>>>0; h^=h>>>13; h=Math.imul(h,0x5bd1e995)>>>0; h^=h>>>15; return ((h/4294967295)*2-1)*zAmp; }
+
+const pos = new Float32Array(N*3);
+for (let i=0;i<N;i++){ pos[i*3]=P[i][F.x]-cx; pos[i*3+1]=P[i][F.y]-cy; pos[i*3+2]=zOf(P[i][F.pmid]); }
+
+// ---------- grouping (ported from the 2D atlas) ----------
+const S = { mode:'mondo', level:3, keys:null, groups:[], colorOf:new Map(), isolate:null, legendHover:null,
+  q:'', y0:2010, y1:2026, strict:false, labelsOn:true, spinOn:true, visible:new Uint8Array(N).fill(1), hover:-1 };
+
+function groupKeys(mode, level){
+  const keys = new Int32Array(N), names = new Map();
+  if (mode==='mondo'){
+    for (let i=0;i<N;i++){ const m=P[i][F.mondo];
+      if (m<0 || (S.strict && P[i][F.tier]>0)){ keys[i]=-1; continue; }
+      const path = lineage[m]; const k = path[Math.min(level, path.length-1)];
+      keys[i]=k; if(!names.has(k)) names.set(k, nodes[k].name);
+    }
+  } else {
+    const idx = F[mode==='group8'?'g8':mode], list = DATA[mode==='site'?'sites':mode==='group8'?'groups8':'clusters'];
+    for (let i=0;i<N;i++){ const k=P[i][idx]; const nm=list[k];
+      const none = (mode==='cluster' && nm==='unclustered') || (mode==='group8' && nm==='none/healthy-cohort');
+      keys[i]= none? -1 : k; if(!none && !names.has(k)) names.set(k,nm);
+    }
+  }
+  return {keys,names};
+}
+function computeGroups(){
+  const {keys,names} = groupKeys(S.mode, S.level);
+  const count = new Map();
+  for (let i=0;i<N;i++){ const k=keys[i]; if(k>=0) count.set(k,(count.get(k)||0)+1); }
+  const groups = [...count.entries()].sort((a,b)=>b[1]-a[1]).map(([k,n])=>({k,n,name:names.get(k)}));
+  const colorOf = new Map();
+  groups.slice(0,7).forEach((g,i)=>colorOf.set(g.k, HUES[i]));
+  S.keys=keys; S.groups=groups; S.colorOf=colorOf;
+  if (S.isolate!=null && S.isolate!=='other' && S.isolate!=='none' && !count.has(S.isolate)) S.isolate=null;
+  paintColors(); paintAlpha(); renderLegend(); buildLabels();
+}
+function colorFor(i){ const k=S.keys[i]; if(k<0) return NONE; return S.colorOf.get(k)||OTHER; }
+function inSelection(i, sel){ const k=S.keys[i];
+  if (sel==='none') return k<0;
+  if (sel==='other') return k>=0 && !S.colorOf.has(k);
+  return k===sel; }
+
+// ---------- three.js scene ----------
+const stage=$('stage'), cv=$('gl');
+const renderer = new THREE.WebGLRenderer({canvas:cv, antialias:true, preserveDrawingBuffer:true});
+renderer.setClearColor(new THREE.Color(SKY), 1);
+renderer.autoClear = false;
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(new THREE.Color(SKY), span*1.6, span*4.2);
+const camera = new THREE.PerspectiveCamera(50, 1, span/1000, span*12);
+
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+const colArr = new Float32Array(N*3), alpArr = new Float32Array(N).fill(1);
+geo.setAttribute('aColor', new THREE.BufferAttribute(colArr,3));
+geo.setAttribute('aAlpha', new THREE.BufferAttribute(alpArr,1));
+
+const vsh = `
+attribute vec3 aColor; attribute float aAlpha;
+uniform float uScale; uniform float uSize;
+varying vec3 vColor; varying float vAlpha;
+void main(){
+  vColor=aColor; vAlpha=aAlpha;
+  vec4 mv = modelViewMatrix * vec4(position,1.0);
+  gl_PointSize = clamp(uSize * uScale / -mv.z, 1.0, 64.0);
+  gl_Position = projectionMatrix * mv;
+}`;
+const fsh = `
+precision mediump float;
+varying vec3 vColor; varying float vAlpha;
+uniform float uGlow;
+void main(){
+  vec2 c = gl_PointCoord - 0.5; float d = length(c)*2.0;
+  if (d>1.0) discard;
+  float a = uGlow>0.5 ? (1.0-d)*(1.0-d)*0.30 : smoothstep(1.0, 0.5, d);
+  if (a*vAlpha < 0.01) discard;
+  gl_FragColor = vec4(vColor, a*vAlpha);
+}`;
+function mat(glow, size, blend){
+  return new THREE.ShaderMaterial({vertexShader:vsh, fragmentShader:fsh, transparent:true, depthWrite:false, blending:blend,
+    uniforms:{ uScale:{value:600}, uSize:{value:size}, uGlow:{value:glow} }});
+}
+const coreMat = mat(0, span*0.0042, THREE.NormalBlending);
+const glowMat = mat(1, span*0.0150, THREE.AdditiveBlending);
+scene.add(new THREE.Points(geo, glowMat));
+const corePoints = new THREE.Points(geo, coreMat);
+scene.add(corePoints);
+
+const tmpColor = new THREE.Color();
+function paintColors(){
+  for (let i=0;i<N;i++){ tmpColor.set(colorFor(i)); colArr[i*3]=tmpColor.r; colArr[i*3+1]=tmpColor.g; colArr[i*3+2]=tmpColor.b; }
+  geo.attributes.aColor.needsUpdate = true;
+}
+function paintAlpha(){
+  const focus = S.legendHover!=null ? S.legendHover : S.isolate;
+  for (let i=0;i<N;i++){
+    const k=S.keys[i]; const colored = k>=0 && S.colorOf.has(k);
+    let a = colored ? 1.0 : (k<0 ? 0.35 : 0.55);
+    if (!S.visible[i]) a *= 0.06;
+    else if (focus!=null) a *= inSelection(i,focus) ? 1 : 0.08;
+    alpArr[i]=a;
+  }
+  geo.attributes.aAlpha.needsUpdate = true;
+}
+
+// ---------- HUD: captions, title cards and fades drawn INTO the canvas, so recordings include them ----------
+let hudW=1, hudH=1;
+const hudScene = new THREE.Scene();
+const hudCam = new THREE.OrthographicCamera(0,1,1,0,-10,10);
+const fadeMat = new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0, depthTest:false});
+const fadeQuad = new THREE.Mesh(new THREE.PlaneGeometry(1,1), fadeMat);
+fadeQuad.renderOrder=5; hudScene.add(fadeQuad);
+function hudTextMesh(){
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1,1), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthTest:false}));
+  m.visible=false; m.renderOrder=6; hudScene.add(m);
+  return m;
+}
+const capMesh = hudTextMesh(), titleMesh = hudTextMesh();
+function makeTextTexture(main, small, big){
+  const sc=2;
+  const fsMain=(big?Math.min(58,hudW*0.05):Math.min(27,hudW*0.023))*sc;
+  const fsSmall=12.5*sc;
+  const c=document.createElement('canvas'); let g=c.getContext('2d');
+  const fMain=`italic 600 ${fsMain}px "Cormorant Garamond", Georgia, serif`;
+  const fSmall=`500 ${fsSmall}px "IBM Plex Sans", Arial, sans-serif`;
+  g.font=fMain; const wMain=g.measureText(main).width;
+  g.font=fSmall; const wSmall=small? g.measureText(small.toUpperCase()).width*1.2 : 0;
+  c.width=Math.ceil(Math.max(wMain,wSmall))+100; c.height=Math.ceil(fsMain*1.25+(small?fsSmall*2.6:0))+50;
+  g=c.getContext('2d');
+  g.textAlign='center'; g.shadowColor='rgba(0,0,0,.85)'; g.shadowBlur=26;
+  g.font=fMain; g.fillStyle='#E8ECF5';
+  g.fillText(main, c.width/2, fsMain*1.05+24);
+  if (small){ g.font=fSmall; g.fillStyle='#A9B2C6';
+    try{ g.letterSpacing=(fsSmall*0.16)+'px'; }catch(e){}
+    g.fillText(small.toUpperCase(), c.width/2, fsMain*1.05+24+fsSmall*2.1); }
+  const tex=new THREE.CanvasTexture(c);
+  return {tex, w:c.width/sc, h:c.height/sc};
+}
+function setHud(mesh, main, small, big){
+  if (!main){ mesh.visible=false; return; }
+  const {tex,w,h}=makeTextTexture(main,small,big);
+  if (mesh.material.map) mesh.material.map.dispose();
+  mesh.material.map=tex; mesh.material.needsUpdate=true;
+  mesh.scale.set(w,h,1);
+  mesh.visible=true;
+}
+function layoutHud(){
+  hudCam.left=0; hudCam.right=hudW; hudCam.top=hudH; hudCam.bottom=0; hudCam.updateProjectionMatrix();
+  fadeQuad.scale.set(hudW,hudH,1); fadeQuad.position.set(hudW/2,hudH/2,0);
+  capMesh.position.set(hudW/2, hudH*0.13, 1);
+  titleMesh.position.set(hudW/2, hudH*0.52, 1);
+}
+
+// ---------- labels: sprite billboards at each top group's densest spot ----------
+const labelGroup = new THREE.Group(); scene.add(labelGroup);
+function makeLabelSprite(text, color, big){
+  const pad=18, fs=big?46:34;
+  const c=document.createElement('canvas'); const g=c.getContext('2d');
+  g.font = `italic 600 ${fs}px "Cormorant Garamond", Georgia, serif`;
+  const w=Math.ceil(g.measureText(text).width)+pad*2, h=fs+pad*2;
+  c.width=w; c.height=h;
+  g.font = `italic 600 ${fs}px "Cormorant Garamond", Georgia, serif`;
+  g.textAlign='center'; g.textBaseline='middle';
+  g.shadowColor='rgba(0,0,0,0.9)'; g.shadowBlur=14;
+  g.lineWidth=7; g.lineJoin='round'; g.strokeStyle='rgba(7,11,20,0.85)'; g.strokeText(text,w/2,h/2);
+  g.fillStyle=color; g.fillText(text,w/2,h/2);
+  const tex=new THREE.CanvasTexture(c); tex.anisotropy=4;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false}));
+  sp.userData={aspect:w/h, big};
+  sp.renderOrder = 10;
+  return sp;
+}
+function buildLabels(){
+  labelGroup.clear();
+  if (!S.labelsOn) return;
+  const cell = span/18;
+  const placed=[]; // larger groups win; later labels too close in data space are skipped
+  S.groups.slice(0,7).forEach(g=>{
+    const grid=new Map(); const pts=[];
+    for (let i=0;i<N;i++){ if(S.keys[i]!==g.k) continue; pts.push(i);
+      const kk=Math.floor(pos[i*3]/cell)+','+Math.floor(pos[i*3+1]/cell);
+      grid.set(kk,(grid.get(kk)||0)+1); }
+    if (!pts.length) return;
+    let bestK=null,bestC=-1; for (const [kk,c] of grid){ if(c>bestC){bestC=c;bestK=kk;} }
+    const [gx,gy]=bestK.split(',').map(Number);
+    let sx=0,sy=0,n=0;
+    for (const i of pts){ const dx=pos[i*3]-(gx+0.5)*cell, dy=pos[i*3+1]-(gy+0.5)*cell;
+      if (dx*dx+dy*dy < (cell*1.6)**2){ sx+=pos[i*3]; sy+=pos[i*3+1]; n++; } }
+    if (!n){ for(const i of pts){sx+=pos[i*3];sy+=pos[i*3+1];} n=pts.length; }
+    const lx=sx/n, ly=sy/n;
+    if (placed.some(p=>Math.hypot(p[0]-lx,p[1]-ly) < span*0.14)) return;
+    placed.push([lx,ly]);
+    const name = g.name.length>30 ? g.name.slice(0,28)+'…' : g.name;
+    const sp = makeLabelSprite(name, S.colorOf.get(g.k)||OTHER, true);
+    sp.position.set(lx, ly, zAmp*1.8);
+    labelGroup.add(sp);
+  });
+}
+
+// ---------- legend ----------
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function renderLegend(){
+  const top=S.groups.slice(0,7), rest=S.groups.slice(7);
+  const restN=rest.reduce((a,g)=>a+g.n,0);
+  const noneN=N - S.groups.reduce((a,g)=>a+g.n,0);
+  const noneLabel = S.mode==='mondo'?'No disease term': S.mode==='cluster'?'Unclustered': S.mode==='group8'?'Healthy cohort / none':'';
+  $('legendTitle').textContent = S.mode==='mondo' ? `Constellations · level ${S.level-2} of 8` : 'Constellations';
+  let html='';
+  for (const g of top) html+=`<li data-k="${g.k}" aria-pressed="${S.isolate===g.k}" tabindex="0" role="button"><span class="swatch" style="background:${S.colorOf.get(g.k)};color:${S.colorOf.get(g.k)}"></span><span class="nm" title="${esc(g.name)}">${esc(g.name)}</span><span class="n">${g.n.toLocaleString()}</span></li>`;
+  if (rest.length) html+=`<li data-k="other" class="dim" aria-pressed="${S.isolate==='other'}" tabindex="0" role="button"><span class="swatch" style="background:${OTHER};color:transparent"></span><span class="nm">${rest.length} smaller groups</span><span class="n">${restN.toLocaleString()}</span></li>`;
+  if (noneN) html+=`<li data-k="none" class="dim" aria-pressed="${S.isolate==='none'}" tabindex="0" role="button"><span class="swatch" style="background:${NONE};color:transparent"></span><span class="nm">${noneLabel}</span><span class="n">${noneN.toLocaleString()}</span></li>`;
+  $('legend').innerHTML=html;
+  $('depthRead').innerHTML = `<b>${S.groups.length.toLocaleString()}</b> groups`;
+}
+function parseKey(k){ return (k==='other'||k==='none')?k:+k; }
+$('legend').addEventListener('click',e=>{ const li=e.target.closest('li'); if(!li) return;
+  const k=parseKey(li.dataset.k); S.isolate = (S.isolate===k)?null:k; renderLegend(); paintAlpha(); });
+$('legend').addEventListener('mouseover',e=>{ const li=e.target.closest('li'); if(!li) return; S.legendHover=parseKey(li.dataset.k); paintAlpha(); });
+$('legend').addEventListener('mouseleave',()=>{ S.legendHover=null; paintAlpha(); });
+
+// ---------- filters ----------
+function applyFilters(){
+  const q=S.q.trim().toLowerCase(); let hits=0; let first=-1;
+  for (let i=0;i<N;i++){ const p=P[i]; let v = p[F.year]>=S.y0 && p[F.year]<=S.y1;
+    if (v && q) v = p[F.title].toLowerCase().includes(q) || DATA.journals[p[F.journal]].toLowerCase().includes(q);
+    S.visible[i]=v?1:0; if(v){ hits++; if(first<0) first=i; } }
+  $('hits').textContent = (q||S.y0>2010||S.y1<2026) ? hits.toLocaleString() : '';
+  paintAlpha();
+  return first;
+}
+
+// ---------- camera: custom orbit ----------
+const panelShift = () => innerWidth>760 ? -span*0.10 : 0; // nudge the cloud right of the panel
+const cam = { target:new THREE.Vector3(panelShift(),0,0), r:span*1.45, theta:-0.35, phi:1.15 };
+const goal = { target:cam.target.clone(), r:cam.r, theta:cam.theta, phi:cam.phi };
+function fitView(){ Object.assign(goal,{r:span*1.45, theta:-0.35, phi:1.15}); goal.target.set(panelShift(),0,0); }
+function applyCam(c){
+  const sp=Math.sin(c.phi), x=c.r*sp*Math.sin(c.theta), y=c.r*Math.cos(c.phi), z=c.r*sp*Math.cos(c.theta);
+  camera.position.set(c.target.x+x, c.target.y+y, c.target.z+z);
+  camera.lookAt(c.target);
+}
+let lastInteract = performance.now();
+function poke(){ lastInteract = performance.now(); }
+
+const pointers=new Map(); let dragBtn=0, moved=false, downAt=0;
+cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture(e.pointerId); pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  dragBtn=e.button; moved=false; downAt=performance.now(); cv.classList.add('dragging'); hideTip(); poke(); });
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointermove',e=>{
+  poke();
+  if (pointers.has(e.pointerId)){
+    const prev=[...pointers.values()];
+    const prevMid={x:(prev[0].x+(prev[1]?.x??prev[0].x))/2, y:(prev[0].y+(prev[1]?.y??prev[0].y))/2};
+    const prevDist=prev[1]?Math.hypot(prev[0].x-prev[1].x,prev[0].y-prev[1].y):0;
+    pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    const cur=[...pointers.values()];
+    if (cur.length===2){
+      const dist=Math.hypot(cur[0].x-cur[1].x,cur[0].y-cur[1].y);
+      const mid={x:(cur[0].x+cur[1].x)/2,y:(cur[0].y+cur[1].y)/2};
+      if (prevDist>0) goal.r=Math.max(span*0.06, Math.min(span*4, goal.r*prevDist/dist));
+      panBy(mid.x-prevMid.x, mid.y-prevMid.y);
+      moved=true; return;
+    }
+    const p=cur[0], dx=e.clientX-prev[0].x, dy=e.clientY-prev[0].y;
+    if (Math.abs(dx)+Math.abs(dy)>2) moved=true;
+    if (dragBtn===2 || e.shiftKey) panBy(dx,dy);
+    else { goal.theta -= dx*0.005; goal.phi = Math.max(0.15, Math.min(Math.PI-0.15, goal.phi - dy*0.005)); }
+    return;
+  }
+  // hover pick
+  const i = pick(e.clientX, e.clientY);
+  if (i!==S.hover){ S.hover=i; cv.classList.toggle('pointing', i>=0); }
+  if (i>=0) showTip(i, e.clientX, e.clientY); else hideTip();
+});
+function panBy(dx,dy){
+  const h = 2*Math.tan(camera.fov*Math.PI/360)*goal.r;
+  const sx = h*camera.aspect/renderer.domElement.clientWidth, sy=h/renderer.domElement.clientHeight;
+  const right=new THREE.Vector3(), up=new THREE.Vector3(0,1,0), fwd=new THREE.Vector3();
+  camera.getWorldDirection(fwd); right.crossVectors(fwd,up).normalize();
+  const camUp = new THREE.Vector3().crossVectors(right,fwd).normalize();
+  goal.target.addScaledVector(right,-dx*sx).addScaledVector(camUp,dy*sy);
+}
+function endPointer(e){ pointers.delete(e.pointerId);
+  if (pointers.size===0){
+    cv.classList.remove('dragging');
+    if (!moved && e.type==='pointerup' && performance.now()-downAt<400){
+      const i=pick(e.clientX,e.clientY);
+      if (i>=0) window.open('https://pubmed.ncbi.nlm.nih.gov/'+P[i][F.pmid]+'/','_blank','noopener');
+    }
+  }
+}
+cv.addEventListener('pointerup',endPointer); cv.addEventListener('pointercancel',endPointer);
+cv.addEventListener('pointerleave',()=>{ if(!pointers.size){ S.hover=-1; hideTip(); } });
+cv.addEventListener('wheel',e=>{ e.preventDefault(); poke();
+  const f=Math.exp(e.deltaY*(e.deltaMode===1?0.05:0.0013));
+  goal.r=Math.max(span*0.06, Math.min(span*4, goal.r*f)); hideTip(); },{passive:false});
+$('zin').onclick=()=>{ poke(); goal.r=Math.max(span*0.06, goal.r/1.45); };
+$('zout').onclick=()=>{ poke(); goal.r=Math.min(span*4, goal.r*1.45); };
+$('zreset').onclick=()=>{ poke(); fitView(); };
+addEventListener('keydown',e=>{ if (e.target.matches('input,select')) return; poke();
+  if (e.key==='0') fitView();
+  if (e.key==='+'||e.key==='=') goal.r=Math.max(span*0.06, goal.r/1.45);
+  if (e.key==='-') goal.r=Math.min(span*4, goal.r*1.45);
+  if (e.key==='Escape' && tour.on) endTour(); });
+
+// ---------- picking ----------
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = span*0.004;
+const ndc = new THREE.Vector2();
+function pick(px,py){
+  const rect=cv.getBoundingClientRect();
+  if (px<rect.left||px>rect.right||py<rect.top||py>rect.bottom) return -1;
+  ndc.x=((px-rect.left)/rect.width)*2-1; ndc.y=-((py-rect.top)/rect.height)*2+1;
+  raycaster.params.Points.threshold = span*0.004*Math.max(0.4, cam.r/span);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObject(corePoints);
+  for (const h of hits){ if (alpArr[h.index]>0.15) return h.index; }
+  return -1;
+}
+const tip=$('tip');
+function showTip(i,px,py){
+  const p=P[i]; const k=S.keys[i]; const col=colorFor(i);
+  let path='';
+  if (p[F.mondo]>=0){ const L=lineage[p[F.mondo]].slice(2);
+    path=`<div class="path">${L.map(n=>`<span>${esc(nodes[n].name)}</span>`).join('<i>›</i>')}</div>`; }
+  else path=`<div class="path" style="color:var(--ink-3)">No disease term in MeSH headings</div>`;
+  tip.innerHTML=`<div class="t">${esc(p[F.title])}</div><div class="m"><b>${esc(DATA.journals[p[F.journal]])}</b> · ${p[F.year]} · ${esc(DATA.sites[p[F.site]])}</div>${path}<div class="cta">PMID ${esc(p[F.pmid])} · click to open on PubMed</div>`;
+  const w=tip.offsetWidth||320, h=tip.offsetHeight||140;
+  let x=px+18, y=py+18; if (x+w>innerWidth-12) x=px-w-18; if (y+h>innerHeight-12) y=py-h-18;
+  tip.style.left=x+'px'; tip.style.top=y+'px'; tip.classList.add('show');
+}
+function hideTip(){ tip.classList.remove('show'); }
+
+// ---------- controls wiring ----------
+$('modes').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return;
+  for (const x of $('modes').children) x.setAttribute('aria-pressed', x===b);
+  S.mode=b.dataset.mode; S.isolate=null;
+  $('depthBox').hidden = S.mode!=='mondo';
+  computeGroups(); });
+$('depth').addEventListener('input',e=>{ S.level=+e.target.value; computeGroups(); });
+$('q').addEventListener('input',e=>{ S.q=e.target.value; applyFilters(); });
+$('q').addEventListener('keydown',e=>{ if(e.key==='Enter'){ const i=applyFilters(); if(i>=0) flyTo(i); } });
+function years(){ let a=+$('y0').value,b=+$('y1').value; if(a>b)[a,b]=[b,a]; S.y0=a; S.y1=b;
+  $('yearRead').textContent=`${a} – ${b}`;
+  const lo=(a-2010)/16*100, hi=(b-2010)/16*100; $('yearFill').style.left=lo+'%'; $('yearFill').style.width=(hi-lo)+'%';
+  applyFilters(); }
+$('y0').addEventListener('input',years); $('y1').addEventListener('input',years);
+$('strict').addEventListener('change',e=>{ S.strict=e.target.checked; computeGroups(); });
+$('labels').addEventListener('change',e=>{ S.labelsOn=e.target.checked; buildLabels(); });
+$('spin').addEventListener('change',e=>{ S.spinOn=e.target.checked; });
+
+function flyTo(i){
+  goal.target.set(pos[i*3], pos[i*3+1], pos[i*3+2]);
+  goal.r = span*0.18;
+}
+
+// ---------- sizing ----------
+let fixedSize=null; // [w,h] while recording
+function resize(){
+  let w,h;
+  if (fixedSize){ [w,h]=fixedSize;
+    const s=Math.min(innerWidth/w, innerHeight/h);
+    cv.style.width=(w*s)+'px'; cv.style.height=(h*s)+'px';
+  } else { w=innerWidth; h=innerHeight; cv.style.width=w+'px'; cv.style.height=h+'px'; }
+  const dpr = fixedSize?1:Math.min(2, devicePixelRatio||1);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  const scale = (h*dpr)/(2*Math.tan(camera.fov*Math.PI/360));
+  coreMat.uniforms.uScale.value=scale; glowMat.uniforms.uScale.value=scale;
+  hudW=w; hudH=h; layoutHud();
+}
+addEventListener('resize',resize);
+
+// ---------- tour ----------
+const tour = { on:false, t0:0, beats:[], total:0, saved:null, recorder:null, chunks:[] };
+function centroidOf(field, value){
+  let sx=0,sy=0,n=0;
+  for (let i=0;i<N;i++){ if(P[i][field]===value) { sx+=pos[i*3]; sy+=pos[i*3+1]; n++; } }
+  return n? new THREE.Vector3(sx/n, sy/n, 0) : new THREE.Vector3();
+}
+function siteIdx(name){ return DATA.sites.indexOf(name); }
+function countSite(name){ const s=siteIdx(name); let n=0; for(const p of P) if(p[F.site]===s) n++; return n; }
+function buildTour(){
+  const gut=centroidOf(F.site, siteIdx('gut'));
+  const vag=centroidOf(F.site, siteIdx('vaginal/urogenital'));
+  const skin=centroidOf(F.site, siteIdx('skin'));
+  const nGut=countSite('gut').toLocaleString(), nVag=countSite('vaginal/urogenital').toLocaleString(), nSkin=countSite('skin').toLocaleString();
+  const wide={target:new THREE.Vector3(0,0,0), r:span*1.6, phi:1.05};
+  const B=[];
+  B.push({dur:8, from:{...wide, theta:-0.9}, to:{...wide, theta:-0.25},
+    title:['Qiita Atlas', `${N.toLocaleString()} human microbiome papers · 2010–2026`]});
+  B.push({dur:6, from:{target:wide.target, r:span*1.3, theta:-0.25, phi:1.05}, to:{target:gut, r:span*0.30, theta:0.3, phi:1.25},
+    cap:[`The gut dominates: ${nGut} papers`, 'colour · body site'],
+    onStart:()=>setMode('site')});
+  B.push({dur:8, from:{target:gut, r:span*0.30, theta:0.3, phi:1.25}, to:{target:new THREE.Vector3(0,0,0), r:span*1.1, theta:1.4, phi:0.95},
+    cap:['Eight disease classes, one map', 'colour · disease class'],
+    onStart:()=>setMode('group8')});
+  B.push({dur:5, from:{target:new THREE.Vector3(0,0,0), r:span*1.1, theta:1.4, phi:0.95}, to:{target:vag, r:span*0.26, theta:1.9, phi:1.2},
+    cap:[`Vaginal & urogenital: only ${nVag} papers`, 'the gaps are the finding'],
+    onStart:()=>setMode('site')});
+  B.push({dur:5, from:{target:vag, r:span*0.26, theta:1.9, phi:1.2}, to:{target:skin, r:span*0.26, theta:2.5, phi:1.15},
+    cap:[`Skin: ${nSkin} papers, against ${nGut} for gut`, '']});
+  B.push({dur:8, from:{target:skin, r:span*0.26, theta:2.5, phi:1.15}, to:{...wide, theta:3.6, phi:1.05},
+    title:['Qiita Atlas', 'qiita-atlas.vercel.app'],
+    onStart:()=>setMode('mondo')});
+  tour.beats=B; tour.total=B.reduce((a,b)=>a+b.dur,0);
+}
+function setMode(m){ S.mode=m; for (const x of $('modes').children) x.setAttribute('aria-pressed', x.dataset.mode===m);
+  $('depthBox').hidden = m!=='mondo'; computeGroups(); }
+const easeIO = t => t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+function startTour(record){
+  if (tour.on) return;
+  buildTour();
+  tour.saved = { mode:S.mode, cam:{target:goal.target.clone(), r:goal.r, theta:goal.theta, phi:goal.phi} };
+  tour.on=true; tour.startedBeat=-1;
+  document.body.classList.add('touring');
+  $('skip').classList.add('show');
+  fadeMat.opacity=1;
+  hideTip();
+  if (record) startRecording();
+  tour.t0=performance.now()+(record?700:200);
+}
+function endTour(){
+  if (!tour.on) return;
+  tour.on=false;
+  document.body.classList.remove('touring');
+  $('skip').classList.remove('show');
+  capMesh.visible=false; titleMesh.visible=false; fadeMat.opacity=0;
+  labelGroup.visible = S.labelsOn;
+  if (tour.recorder && tour.recorder.state!=='inactive') tour.recorder.stop();
+  const s=tour.saved;
+  if (s){ setMode(s.mode); goal.target.copy(s.cam.target); goal.r=s.cam.r; goal.theta=s.cam.theta; goal.phi=s.cam.phi; }
+}
+function tourTick(now){
+  let t=(now-tour.t0)/1000;
+  if (t<0) t=0;
+  if (t>=tour.total){ endTour(); return; }
+  // page fades from black at the start and back to black at the end — part of the canvas, so it records
+  fadeMat.opacity = Math.max(0, Math.min(1, Math.max(1-t/1.2, (t-(tour.total-1.0))/1.0)));
+  let acc=0, bi=0;
+  for (;bi<tour.beats.length;bi++){ if (t<acc+tour.beats[bi].dur) break; acc+=tour.beats[bi].dur; }
+  const b=tour.beats[bi], lt=t-acc, u=easeIO(Math.min(1,lt/b.dur));
+  if (tour.startedBeat!==bi){ tour.startedBeat=bi;
+    b.onStart && b.onStart();
+    setHud(titleMesh, b.title?.[0], b.title?.[1], true);
+    setHud(capMesh, b.cap?.[0], b.cap?.[1], false);
+    labelGroup.visible = S.labelsOn && !b.title;
+  }
+  const textA = Math.max(0, Math.min(1, lt/0.6, (b.dur-lt)/0.6));
+  titleMesh.material.opacity = textA; capMesh.material.opacity = textA;
+  cam.target.lerpVectors(b.from.target, b.to.target, u);
+  cam.r = b.from.r+(b.to.r-b.from.r)*u;
+  cam.theta = b.from.theta+(b.to.theta-b.from.theta)*u;
+  cam.phi = b.from.phi+(b.to.phi-b.from.phi)*u;
+  Object.assign(goal,{r:cam.r,theta:cam.theta,phi:cam.phi}); goal.target.copy(cam.target);
+}
+$('play').onclick=()=>startTour(false);
+$('skip').onclick=endTour;
+
+// ---------- recording ----------
+const canRecord = 'MediaRecorder' in window && cv.captureStream;
+if (!canRecord){ $('rec').style.display='none'; $('aspect').style.display='none'; }
+function startRecording(){
+  if (!canRecord) return;
+  fixedSize = $('aspect').value==='9:16' ? [1080,1920] : [1920,1080];
+  resize();
+  const stream = cv.captureStream(60);
+  let mime='video/webm;codecs=vp9'; if (!MediaRecorder.isTypeSupported(mime)) mime='video/webm;codecs=vp8';
+  if (!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+  tour.chunks=[];
+  tour.recorder = new MediaRecorder(stream,{mimeType:mime, videoBitsPerSecond:12_000_000});
+  tour.recorder.ondataavailable = e=>{ if(e.data.size) tour.chunks.push(e.data); };
+  tour.recorder.onstop = ()=>{
+    $('recdot').classList.remove('show');
+    fixedSize=null; resize();
+    const blob=new Blob(tour.chunks,{type:'video/webm'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='qiita_atlas_tour.webm'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 30000);
+  };
+  tour.recorder.start(250);
+  $('recdot').classList.add('show');
+}
+$('rec').onclick=()=>startTour(true);
+
+// ---------- stats + main loop ----------
+let frames=0, fpsAt=performance.now(), fps=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  if (tour.on) tourTick(now);
+  else {
+    if (fadeMat.opacity>0) fadeMat.opacity=Math.max(0,fadeMat.opacity-0.05);
+    const idle = now-lastInteract>4000;
+    if (S.spinOn && idle && !reduceMotion) goal.theta += 0.0006;
+    const d = reduceMotion?1:0.12;
+    cam.r += (goal.r-cam.r)*d; cam.theta += (goal.theta-cam.theta)*d; cam.phi += (goal.phi-cam.phi)*d;
+    cam.target.lerp(goal.target, d);
+  }
+  applyCam(tour.on?cam:cam);
+  // keep label sprites a steady on-screen size
+  for (const sp of labelGroup.children){
+    const dist=camera.position.distanceTo(sp.position);
+    const hgt=dist*0.045*(sp.userData.big?1:0.75);
+    sp.scale.set(hgt*sp.userData.aspect, hgt, 1);
+  }
+  renderer.clear();
+  renderer.render(scene,camera);
+  renderer.clearDepth();
+  renderer.render(hudScene,hudCam);
+  frames++;
+  if (now-fpsAt>1000){ fps=frames; frames=0; fpsAt=now;
+    const zoom=(span*1.35/cam.r).toFixed(1);
+    $('stats').innerHTML=`<b>${N.toLocaleString()}</b> stars · ${zoom}× · ${fps} fps<br>z is seeded jitter — depth is illustrative`;
+  }
+}
+
+// ---------- boot ----------
+computeGroups(); applyFilters(); years(); resize(); fitView(); applyCam(cam);
+requestAnimationFrame(loop);
+document.fonts && document.fonts.ready.then(()=>buildLabels());
+$('loading').classList.add('off');
+</script>
+</body>
+</html>
